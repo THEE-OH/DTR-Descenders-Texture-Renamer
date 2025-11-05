@@ -25,7 +25,6 @@ except ImportError:
         tk.messagebox.showerror("Missing Library", "Cannot continue without 'tkinterdnd2'. Exiting.")
         sys.exit(1)
 
-
 # -----------------------------
 # Texture Sorting Logic
 # -----------------------------
@@ -33,27 +32,14 @@ def sort_file_into_slot(filename):
     """Automatically decide where a texture belongs based on its name."""
     name = filename.lower()
     if "frame" in name:
-        if "metal" in name or "ms" in name:
-            return "frame_metal"
-        else:
-            return "frame_base"
+        return "frame_metal" if "metal" in name or "ms" in name else "frame_base"
     elif "gear" in name:
-        if "metal" in name or "ms" in name:
-            return "gear_metal"
-        else:
-            return "gear_base"
+        return "gear_metal" if "metal" in name or "ms" in name else "gear_base"
     elif "handle" in name or "bar" in name:
-        if "metal" in name or "ms" in name:
-            return "handlebar_metal"
-        else:
-            return "handlebar_base"
+        return "handlebar_metal" if "metal" in name or "ms" in name else "handlebar_base"
     elif "wheel" in name:
-        if "metal" in name or "ms" in name:
-            return "wheels_metal"
-        else:
-            return "wheels_base"
+        return "wheels_metal" if "metal" in name or "ms" in name else "wheels_base"
     return None
-
 
 # -----------------------------
 # GUI Functions
@@ -66,7 +52,6 @@ def browse_file(entry_field):
     if file_path:
         entry_field.delete(0, tk.END)
         entry_field.insert(0, file_path)
-
 
 def handle_bulk_drop(event):
     """Handle multiple dropped files at once."""
@@ -86,10 +71,9 @@ def handle_bulk_drop(event):
     else:
         messagebox.showwarning("No Match", "No valid texture names detected in dropped files.")
 
-
 def export_textures():
     bike_num = bike_number_entry.get().strip()
-    rename_enabled = rename_var.get()  # Read toggle state
+    rename_enabled = rename_var.get()
 
     if rename_enabled and not bike_num.isdigit():
         messagebox.showerror("Invalid Input", "Please enter a valid bike number (numbers only).")
@@ -127,13 +111,13 @@ def export_textures():
             shutil.copy2(base_in, base_out)
             processed.append(f"{part} base")
 
-        # Process metallic map with transparency effect
+        # Process metallic map (black = transparent, white = opaque)
         if metal_in and os.path.isfile(metal_in):
             metal_img = Image.open(metal_in).convert("RGBA")
             new_data = []
             for r, g, b, *_ in metal_img.getdata():
                 gray = (r + g + b) / 3
-                alpha = int((gray / 255) * 255)  # black = transparent, white = opaque
+                alpha = int((gray / 255) * 255)  # black=0 transparent, white=255 opaque
                 new_data.append((r, g, b, alpha))
             metal_img.putdata(new_data)
             metal_img.save(metal_out)
@@ -145,13 +129,12 @@ def export_textures():
     else:
         messagebox.showwarning("No Files", "No valid textures were selected.")
 
-
 # -----------------------------
 # GUI Setup
 # -----------------------------
 root = TkinterDnD.Tk()
-root.title("Descenders Texture Renamer (Auto-Install & Bulk Drag & Drop)")
-root.geometry("600x630")
+root.title("Descenders Texture Renamer")
+root.geometry("600x650")
 root.resizable(False, False)
 
 # Load icon
@@ -164,18 +147,18 @@ if os.path.exists(icon_path):
     icon = tk.PhotoImage(file=icon_path)
     root.iconphoto(True, icon)
 
-# Title
+# Title label
 tk.Label(root, text="Descenders Texture Renamer", font=("Segoe UI", 16, "bold")).pack(pady=10)
 
-# Drag area for bulk files
+# Bulk drag & drop
 bulk_frame = tk.LabelFrame(root, text="Drag & Drop All Textures Here", padx=10, pady=10)
 bulk_frame.pack(padx=20, pady=10, fill="x")
-bulk_label = tk.Label(bulk_frame, text="Drop up to 8 textures here (auto-sorted)", bg="#f0f0f0", height=3)
+bulk_label = tk.Label(bulk_frame, text="Drop up to 8 textures here (auto-sorted)", bg="#f0f0f0", height=4)
 bulk_label.pack(fill="x", padx=10, pady=5)
 bulk_label.drop_target_register(DND_FILES)
 bulk_label.dnd_bind("<<Drop>>", handle_bulk_drop)
 
-# Individual entries
+# Individual file entries
 frame = tk.Frame(root)
 frame.pack(pady=5)
 entry_fields = {}
@@ -187,7 +170,7 @@ def make_file_row(parent, label_text, key):
     label.pack(side="left")
     entry = tk.Entry(row, width=45)
     entry.pack(side="left", padx=5)
-    browse = tk.Button(row, text="Browse", command=lambda: browse_file(entry))
+    browse = tk.Button(row, text="Browse", bg="white", command=lambda: browse_file(entry))
     browse.pack(side="left")
     entry.drop_target_register(DND_FILES)
     entry.dnd_bind("<<Drop>>", lambda e: entry.delete(0, tk.END) or entry.insert(0, e.data.strip("{}")))
@@ -202,26 +185,33 @@ make_file_row(frame, "Handlebar Metallic:", "handlebar_metal")
 make_file_row(frame, "Wheels Base Colour:", "wheels_base")
 make_file_row(frame, "Wheels Metallic:", "wheels_metal")
 
-# Bike number + toggle
+# Bottom controls (centered)
 bottom_frame = tk.Frame(root)
-bottom_frame.pack(pady=10)
-tk.Label(bottom_frame, text="Bike Number:").pack(side="left", padx=5)
-bike_number_entry = tk.Entry(bottom_frame, width=10)
+bottom_frame.pack(pady=20)
+
+# Bike number
+bike_frame = tk.Frame(bottom_frame)
+bike_frame.pack(pady=5)
+tk.Label(bike_frame, text="Bike Number:").pack(side="left", padx=5)
+bike_number_entry = tk.Entry(bike_frame, width=10)
 bike_number_entry.pack(side="left")
 
+# Rename toggle
 rename_var = tk.BooleanVar(value=True)
-rename_checkbox = tk.Checkbutton(root, text="Enable Renaming Mode", variable=rename_var)
+rename_checkbox = tk.Checkbutton(bottom_frame, text="Enable Renaming Mode", variable=rename_var)
 rename_checkbox.pack(pady=5)
 
 # Export button
 export_button = tk.Button(
-    root, text="Export Textures",
-    font=("Segoe UI", 12, "bold"), bg="#4CAF50", fg="white",
+    bottom_frame, text="Export Textures",
+    font=("Segoe UI", 12, "bold"), bg="#0078D7", fg="white",
     width=20, height=2, command=export_textures
 )
-export_button.pack(pady=20)
+export_button.pack(pady=5)
 
-# Footer
-tk.Label(root, text="Made by THEE OH", font=("Segoe UI", 9), fg="gray").pack(side="bottom", anchor="e", padx=10, pady=5)
+# Footer - always visible at bottom-right
+footer_label = tk.Label(root, text="Made by THEE OH", font=("Segoe UI", 9), fg="gray")
+footer_label.place(relx=1.0, rely=1.0, x=-10, y=-10, anchor="se")
+
 
 root.mainloop()
