@@ -1,6 +1,6 @@
 import os
-import shutil
 import sys
+import shutil
 import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -15,67 +15,49 @@ except ImportError:
     root_temp = tk.Tk()
     root_temp.withdraw()
     install = messagebox.askyesno(
-        "Install Library",
-        "The 'tkinterdnd2' library is not installed.\nInstall it now?"
+        "Install Library", "The 'tkinterdnd2' library is not installed.\nInstall it now?"
     )
     root_temp.destroy()
     if install:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "tkinterdnd2"])
         from tkinterdnd2 import DND_FILES, TkinterDnD
     else:
-        tk.messagebox.showerror(
-            "Missing Library", "Cannot continue without 'tkinterdnd2'. Exiting."
-        )
+        tk.messagebox.showerror("Missing Library", "Cannot continue without 'tkinterdnd2'. Exiting.")
         sys.exit(1)
 
-# --- GUI Setup ---
-root = TkinterDnD.Tk()
-root.title("Descenders Texture Renamer")
 
 # -----------------------------
-# Set window/taskbar icon
+# Texture Sorting Logic
 # -----------------------------
-if getattr(sys, 'frozen', False):
-    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-else:
-    base_path = os.path.dirname(os.path.abspath(__file__))
+def sort_file_into_slot(filename):
+    """Automatically decide where a texture belongs based on its name."""
+    name = filename.lower()
+    if "frame" in name:
+        if "metal" in name or "ms" in name:
+            return "frame_metal"
+        else:
+            return "frame_base"
+    elif "gear" in name:
+        if "metal" in name or "ms" in name:
+            return "gear_metal"
+        else:
+            return "gear_base"
+    elif "handle" in name or "bar" in name:
+        if "metal" in name or "ms" in name:
+            return "handlebar_metal"
+        else:
+            return "handlebar_base"
+    elif "wheel" in name:
+        if "metal" in name or "ms" in name:
+            return "wheels_metal"
+        else:
+            return "wheels_base"
+    return None
 
-ico_path = os.path.join(base_path, "theicon.ico")
-if os.path.isfile(ico_path):
-    root.iconbitmap(ico_path)
 
-# Footer
-footer = tk.Label(root, text="Made by THEE OH", font=("Segoe UI", 9), fg="gray")
-footer.pack(side="bottom", anchor="e", padx=10, pady=5)
-
-root.geometry("600x700")  # taller window
-root.resizable(False, False)
-
-title_label = tk.Label(root, text="Descenders Texture Renamer", font=("Segoe UI", 16, "bold"))
-title_label.pack(pady=10)
-
-frame = tk.Frame(root)
-frame.pack(pady=10)
-
-# --- Helper to make file entries ---
-def make_file_row(parent, label_text):
-    row = tk.Frame(parent)
-    row.pack(fill="x", padx=20, pady=5)
-    label = tk.Label(row, text=label_text, width=20, anchor="w")
-    label.pack(side="left")
-
-    entry = tk.Entry(row, width=45)
-    entry.pack(side="left", padx=5)
-
-    browse = tk.Button(row, text="Browse", command=lambda: browse_file(entry))
-    browse.pack(side="left")
-
-    # Enable drag & drop for individual entry
-    entry.drop_target_register(DND_FILES)
-    entry.dnd_bind("<<Drop>>", lambda e: entry.delete(0, tk.END) or entry.insert(0, e.data.strip("{}")))
-
-    return entry
-
+# -----------------------------
+# GUI Functions
+# -----------------------------
 def browse_file(entry_field):
     file_path = filedialog.askopenfilename(
         title="Select texture file",
@@ -85,116 +67,40 @@ def browse_file(entry_field):
         entry_field.delete(0, tk.END)
         entry_field.insert(0, file_path)
 
-# --- Create individual entries ---
-frame_base_entry = make_file_row(frame, "Frame Base Colour:")
-frame_metal_entry = make_file_row(frame, "Frame Metallic:")
-gear_base_entry = make_file_row(frame, "Gear Base Colour:")
-gear_metal_entry = make_file_row(frame, "Gear Metallic:")
-handlebar_base_entry = make_file_row(frame, "Handlebar Base Colour:")
-handlebar_metal_entry = make_file_row(frame, "Handlebar Metallic:")
-wheels_base_entry = make_file_row(frame, "Wheels Base Colour:")
-wheels_metal_entry = make_file_row(frame, "Wheels Metallic:")
 
-# --- Bulk drag & drop label ---
-bulk_label = tk.Label(
-    root, text="Drag all 8 textures here",
-    font=("Segoe UI", 12, "bold"), fg="blue",
-    relief="groove", height=5  # bigger height
-)
-bulk_label.pack(pady=10, padx=20, fill="x")
+def handle_bulk_drop(event):
+    """Handle multiple dropped files at once."""
+    dropped = event.data.strip("{}").split("}")
+    dropped = [f.strip().replace("{", "") for f in dropped if f.strip()]
+    assigned = []
 
-# --- Function to assign files from bulk drop ---
-def sort_files(files):
-    mapping = {
-        "frame_base": frame_base_entry,
-        "frame_metal": frame_metal_entry,
-        "gear_base": gear_base_entry,
-        "gear_metal": gear_metal_entry,
-        "handlebar_base": handlebar_base_entry,
-        "handlebar_metal": handlebar_metal_entry,
-        "wheels_base": wheels_base_entry,
-        "wheels_metal": wheels_metal_entry,
-    }
+    for path in dropped:
+        slot = sort_file_into_slot(os.path.basename(path))
+        if slot and slot in entry_fields:
+            entry_fields[slot].delete(0, tk.END)
+            entry_fields[slot].insert(0, path)
+            assigned.append(slot)
 
-    for file in files:
-        fname = os.path.basename(file).lower()
-        assigned = False
+    if assigned:
+        messagebox.showinfo("Files Assigned", f"Assigned: {', '.join(assigned)}")
+    else:
+        messagebox.showwarning("No Match", "No valid texture names detected in dropped files.")
 
-        if "frame" in fname:
-            if "ms" in fname or "metal" in fname:
-                mapping["frame_metal"].delete(0, tk.END)
-                mapping["frame_metal"].insert(0, file)
-            else:
-                mapping["frame_base"].delete(0, tk.END)
-                mapping["frame_base"].insert(0, file)
-            assigned = True
 
-        elif "gear" in fname:
-            if "ms" in fname or "metal" in fname:
-                mapping["gear_metal"].delete(0, tk.END)
-                mapping["gear_metal"].insert(0, file)
-            else:
-                mapping["gear_base"].delete(0, tk.END)
-                mapping["gear_base"].insert(0, file)
-            assigned = True
-
-        elif "handlebar" in fname:
-            if "ms" in fname or "metal" in fname:
-                mapping["handlebar_metal"].delete(0, tk.END)
-                mapping["handlebar_metal"].insert(0, file)
-            else:
-                mapping["handlebar_base"].delete(0, tk.END)
-                mapping["handlebar_base"].insert(0, file)
-            assigned = True
-
-        elif "wheel" in fname:
-            if "ms" in fname or "metal" in fname:
-                mapping["wheels_metal"].delete(0, tk.END)
-                mapping["wheels_metal"].insert(0, file)
-            else:
-                mapping["wheels_base"].delete(0, tk.END)
-                mapping["wheels_base"].insert(0, file)
-            assigned = True
-
-bulk_label.drop_target_register(DND_FILES)
-bulk_label.dnd_bind("<<Drop>>", lambda e: sort_files(e.data.split()))
-
-# --- Bike number ---
-bike_frame = tk.Frame(root)
-bike_frame.pack(pady=20)
-tk.Label(bike_frame, text="Bike Number:").pack(side="left", padx=5)
-bike_number_entry = tk.Entry(bike_frame, width=10)
-bike_number_entry.pack(side="left")
-
-# --- Export function ---
 def export_textures():
     bike_num = bike_number_entry.get().strip()
-    if not bike_num.isdigit():
+    rename_enabled = rename_var.get()  # Read toggle state
+
+    if rename_enabled and not bike_num.isdigit():
         messagebox.showerror("Invalid Input", "Please enter a valid bike number (numbers only).")
         return
 
-    input_files = {
-        "frame_base": frame_base_entry.get(),
-        "frame_metal": frame_metal_entry.get(),
-        "gear_base": gear_base_entry.get(),
-        "gear_metal": gear_metal_entry.get(),
-        "handlebar_base": handlebar_base_entry.get(),
-        "handlebar_metal": handlebar_metal_entry.get(),
-        "wheels_base": wheels_base_entry.get(),
-        "wheels_metal": wheels_metal_entry.get(),
-    }
-
-    for key, path in input_files.items():
-        if not os.path.isfile(path):
-            messagebox.showerror(
-                "Missing File", f"Please select or drop a valid file for {key.replace('_', ' ').title()}."
-            )
-            return
-
+    input_files = {key: field.get().strip() for key, field in entry_fields.items()}
     output_dir = filedialog.askdirectory(title="Select Output Folder")
     if not output_dir:
         return
 
+    processed = []
     parts = {
         "frame": ("frame_base", "frame_metal"),
         "gear": ("gear_base", "gear_metal"),
@@ -206,30 +112,116 @@ def export_textures():
         base_in = input_files[base_key]
         metal_in = input_files[metal_key]
 
-        base_out = os.path.join(output_dir, f"{bike_num}_{part}_{bike_num}_D.png")
-        metal_out = os.path.join(output_dir, f"{bike_num}_{part}_{bike_num}_MS.png")
+        if not base_in and not metal_in:
+            continue
 
-        shutil.copy2(base_in, base_out)
+        if rename_enabled:
+            base_out = os.path.join(output_dir, f"{bike_num}_{part}_{bike_num}_D.png")
+            metal_out = os.path.join(output_dir, f"{bike_num}_{part}_{bike_num}_MS.png")
+        else:
+            base_out = os.path.join(output_dir, os.path.basename(base_in)) if base_in else None
+            metal_out = os.path.join(output_dir, os.path.basename(metal_in)) if metal_in else None
 
-        # Process metallic map: brightness -> alpha
-        metal_img = Image.open(metal_in).convert("RGBA")
-        new_data = []
-        for r, g, b, a in metal_img.getdata():
-            brightness = (r + g + b) / 3
-            alpha = int((brightness / 255) * 255)
-            new_data.append((r, g, b, alpha))
-        metal_img.putdata(new_data)
-        metal_img.save(metal_out)
+        # Copy base color normally
+        if base_in and os.path.isfile(base_in):
+            shutil.copy2(base_in, base_out)
+            processed.append(f"{part} base")
 
-    messagebox.showinfo("Success", f"Textures exported successfully to:\n{output_dir}")
+        # Process metallic map with transparency effect
+        if metal_in and os.path.isfile(metal_in):
+            metal_img = Image.open(metal_in).convert("RGBA")
+            new_data = []
+            for r, g, b, *_ in metal_img.getdata():
+                gray = (r + g + b) / 3
+                alpha = int((gray / 255) * 255)  # black = transparent, white = opaque
+                new_data.append((r, g, b, alpha))
+            metal_img.putdata(new_data)
+            metal_img.save(metal_out)
+            processed.append(f"{part} metallic")
 
-# --- Export button ---
+    if processed:
+        mode = "Renamed" if rename_enabled else "Transparency Only"
+        messagebox.showinfo("Success", f"Mode: {mode}\nExported: {', '.join(processed)}\n\nSaved to:\n{output_dir}")
+    else:
+        messagebox.showwarning("No Files", "No valid textures were selected.")
+
+
+# -----------------------------
+# GUI Setup
+# -----------------------------
+root = TkinterDnD.Tk()
+root.title("Descenders Texture Renamer (Auto-Install & Bulk Drag & Drop)")
+root.geometry("600x630")
+root.resizable(False, False)
+
+# Load icon
+if getattr(sys, 'frozen', False):
+    base_path = sys._MEIPASS
+else:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+icon_path = os.path.join(base_path, "theicon.png")
+if os.path.exists(icon_path):
+    icon = tk.PhotoImage(file=icon_path)
+    root.iconphoto(True, icon)
+
+# Title
+tk.Label(root, text="Descenders Texture Renamer", font=("Segoe UI", 16, "bold")).pack(pady=10)
+
+# Drag area for bulk files
+bulk_frame = tk.LabelFrame(root, text="Drag & Drop All Textures Here", padx=10, pady=10)
+bulk_frame.pack(padx=20, pady=10, fill="x")
+bulk_label = tk.Label(bulk_frame, text="Drop up to 8 textures here (auto-sorted)", bg="#f0f0f0", height=3)
+bulk_label.pack(fill="x", padx=10, pady=5)
+bulk_label.drop_target_register(DND_FILES)
+bulk_label.dnd_bind("<<Drop>>", handle_bulk_drop)
+
+# Individual entries
+frame = tk.Frame(root)
+frame.pack(pady=5)
+entry_fields = {}
+
+def make_file_row(parent, label_text, key):
+    row = tk.Frame(parent)
+    row.pack(fill="x", padx=20, pady=4)
+    label = tk.Label(row, text=label_text, width=20, anchor="w")
+    label.pack(side="left")
+    entry = tk.Entry(row, width=45)
+    entry.pack(side="left", padx=5)
+    browse = tk.Button(row, text="Browse", command=lambda: browse_file(entry))
+    browse.pack(side="left")
+    entry.drop_target_register(DND_FILES)
+    entry.dnd_bind("<<Drop>>", lambda e: entry.delete(0, tk.END) or entry.insert(0, e.data.strip("{}")))
+    entry_fields[key] = entry
+
+make_file_row(frame, "Frame Base Colour:", "frame_base")
+make_file_row(frame, "Frame Metallic:", "frame_metal")
+make_file_row(frame, "Gear Base Colour:", "gear_base")
+make_file_row(frame, "Gear Metallic:", "gear_metal")
+make_file_row(frame, "Handlebar Base Colour:", "handlebar_base")
+make_file_row(frame, "Handlebar Metallic:", "handlebar_metal")
+make_file_row(frame, "Wheels Base Colour:", "wheels_base")
+make_file_row(frame, "Wheels Metallic:", "wheels_metal")
+
+# Bike number + toggle
+bottom_frame = tk.Frame(root)
+bottom_frame.pack(pady=10)
+tk.Label(bottom_frame, text="Bike Number:").pack(side="left", padx=5)
+bike_number_entry = tk.Entry(bottom_frame, width=10)
+bike_number_entry.pack(side="left")
+
+rename_var = tk.BooleanVar(value=True)
+rename_checkbox = tk.Checkbutton(root, text="Enable Renaming Mode", variable=rename_var)
+rename_checkbox.pack(pady=5)
+
+# Export button
 export_button = tk.Button(
     root, text="Export Textures",
-    font=("Segoe UI", 14, "bold"), bg="#4CAF50", fg="white",
-    width=22, height=2,
-    command=export_textures
+    font=("Segoe UI", 12, "bold"), bg="#4CAF50", fg="white",
+    width=20, height=2, command=export_textures
 )
-export_button.pack(pady=30)
+export_button.pack(pady=20)
+
+# Footer
+tk.Label(root, text="Made by THEE OH", font=("Segoe UI", 9), fg="gray").pack(side="bottom", anchor="e", padx=10, pady=5)
 
 root.mainloop()
