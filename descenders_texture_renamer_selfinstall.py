@@ -4,7 +4,6 @@ import sys
 import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from tkinter import PhotoImage
 from PIL import Image
 
 # -----------------------------
@@ -29,9 +28,54 @@ except ImportError:
         )
         sys.exit(1)
 
+# --- GUI Setup ---
+root = TkinterDnD.Tk()
+root.title("Descenders Texture Renamer")
+
 # -----------------------------
-# Texture renamer functions
+# Set window/taskbar icon
 # -----------------------------
+if getattr(sys, 'frozen', False):
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+else:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+
+ico_path = os.path.join(base_path, "theicon.ico")
+if os.path.isfile(ico_path):
+    root.iconbitmap(ico_path)
+
+# Footer
+footer = tk.Label(root, text="Made by THEE OH", font=("Segoe UI", 9), fg="gray")
+footer.pack(side="bottom", anchor="e", padx=10, pady=5)
+
+root.geometry("600x700")  # taller window
+root.resizable(False, False)
+
+title_label = tk.Label(root, text="Descenders Texture Renamer", font=("Segoe UI", 16, "bold"))
+title_label.pack(pady=10)
+
+frame = tk.Frame(root)
+frame.pack(pady=10)
+
+# --- Helper to make file entries ---
+def make_file_row(parent, label_text):
+    row = tk.Frame(parent)
+    row.pack(fill="x", padx=20, pady=5)
+    label = tk.Label(row, text=label_text, width=20, anchor="w")
+    label.pack(side="left")
+
+    entry = tk.Entry(row, width=45)
+    entry.pack(side="left", padx=5)
+
+    browse = tk.Button(row, text="Browse", command=lambda: browse_file(entry))
+    browse.pack(side="left")
+
+    # Enable drag & drop for individual entry
+    entry.drop_target_register(DND_FILES)
+    entry.dnd_bind("<<Drop>>", lambda e: entry.delete(0, tk.END) or entry.insert(0, e.data.strip("{}")))
+
+    return entry
+
 def browse_file(entry_field):
     file_path = filedialog.askopenfilename(
         title="Select texture file",
@@ -41,6 +85,88 @@ def browse_file(entry_field):
         entry_field.delete(0, tk.END)
         entry_field.insert(0, file_path)
 
+# --- Create individual entries ---
+frame_base_entry = make_file_row(frame, "Frame Base Colour:")
+frame_metal_entry = make_file_row(frame, "Frame Metallic:")
+gear_base_entry = make_file_row(frame, "Gear Base Colour:")
+gear_metal_entry = make_file_row(frame, "Gear Metallic:")
+handlebar_base_entry = make_file_row(frame, "Handlebar Base Colour:")
+handlebar_metal_entry = make_file_row(frame, "Handlebar Metallic:")
+wheels_base_entry = make_file_row(frame, "Wheels Base Colour:")
+wheels_metal_entry = make_file_row(frame, "Wheels Metallic:")
+
+# --- Bulk drag & drop label ---
+bulk_label = tk.Label(
+    root, text="Drag all 8 textures here",
+    font=("Segoe UI", 12, "bold"), fg="blue",
+    relief="groove", height=5  # bigger height
+)
+bulk_label.pack(pady=10, padx=20, fill="x")
+
+# --- Function to assign files from bulk drop ---
+def sort_files(files):
+    mapping = {
+        "frame_base": frame_base_entry,
+        "frame_metal": frame_metal_entry,
+        "gear_base": gear_base_entry,
+        "gear_metal": gear_metal_entry,
+        "handlebar_base": handlebar_base_entry,
+        "handlebar_metal": handlebar_metal_entry,
+        "wheels_base": wheels_base_entry,
+        "wheels_metal": wheels_metal_entry,
+    }
+
+    for file in files:
+        fname = os.path.basename(file).lower()
+        assigned = False
+
+        if "frame" in fname:
+            if "ms" in fname or "metal" in fname:
+                mapping["frame_metal"].delete(0, tk.END)
+                mapping["frame_metal"].insert(0, file)
+            else:
+                mapping["frame_base"].delete(0, tk.END)
+                mapping["frame_base"].insert(0, file)
+            assigned = True
+
+        elif "gear" in fname:
+            if "ms" in fname or "metal" in fname:
+                mapping["gear_metal"].delete(0, tk.END)
+                mapping["gear_metal"].insert(0, file)
+            else:
+                mapping["gear_base"].delete(0, tk.END)
+                mapping["gear_base"].insert(0, file)
+            assigned = True
+
+        elif "handlebar" in fname:
+            if "ms" in fname or "metal" in fname:
+                mapping["handlebar_metal"].delete(0, tk.END)
+                mapping["handlebar_metal"].insert(0, file)
+            else:
+                mapping["handlebar_base"].delete(0, tk.END)
+                mapping["handlebar_base"].insert(0, file)
+            assigned = True
+
+        elif "wheel" in fname:
+            if "ms" in fname or "metal" in fname:
+                mapping["wheels_metal"].delete(0, tk.END)
+                mapping["wheels_metal"].insert(0, file)
+            else:
+                mapping["wheels_base"].delete(0, tk.END)
+                mapping["wheels_base"].insert(0, file)
+            assigned = True
+
+bulk_label.drop_target_register(DND_FILES)
+bulk_label.dnd_bind("<<Drop>>", lambda e: sort_files(e.data.split()))
+
+# --- Bike number ---
+bike_frame = tk.Frame(root)
+bike_frame.pack(pady=20)
+tk.Label(bike_frame, text="Bike Number:").pack(side="left", padx=5)
+bike_number_entry = tk.Entry(bike_frame, width=10)
+bike_number_entry.pack(side="left")
+
+# --- Export function ---
 def export_textures():
     bike_num = bike_number_entry.get().strip()
     if not bike_num.isdigit():
@@ -58,10 +184,11 @@ def export_textures():
         "wheels_metal": wheels_metal_entry.get(),
     }
 
-    # Ensure paths exist
     for key, path in input_files.items():
         if not os.path.isfile(path):
-            messagebox.showerror("Missing File", f"Please select a valid file for {key.replace('_', ' ').title()}.")
+            messagebox.showerror(
+                "Missing File", f"Please select or drop a valid file for {key.replace('_', ' ').title()}."
+            )
             return
 
     output_dir = filedialog.askdirectory(title="Select Output Folder")
@@ -82,97 +209,27 @@ def export_textures():
         base_out = os.path.join(output_dir, f"{bike_num}_{part}_{bike_num}_D.png")
         metal_out = os.path.join(output_dir, f"{bike_num}_{part}_{bike_num}_MS.png")
 
-        # Copy base color
         shutil.copy2(base_in, base_out)
 
-        # Process metallic map: brightness → alpha
+        # Process metallic map: brightness -> alpha
         metal_img = Image.open(metal_in).convert("RGBA")
         new_data = []
-
         for r, g, b, a in metal_img.getdata():
-            brightness = int((r + g + b) / 3)  # 0=black, 255=white
-            new_data.append((r, g, b, brightness))
-
+            brightness = (r + g + b) / 3
+            alpha = int((brightness / 255) * 255)
+            new_data.append((r, g, b, alpha))
         metal_img.putdata(new_data)
         metal_img.save(metal_out)
 
     messagebox.showinfo("Success", f"Textures exported successfully to:\n{output_dir}")
 
-# -----------------------------
-# GUI Setup
-# -----------------------------
-root = TkinterDnD.Tk()
-root.title("Descenders Texture Renamer (Auto-Install & Drag & Drop)")
-
-# Load icon
-if getattr(sys, 'frozen', False):
-    base_path = sys._MEIPASS
-else:
-    base_path = os.path.dirname(os.path.abspath(__file__))
-
-icon_path = os.path.join(base_path, "theicon.png")
-if os.path.isfile(icon_path):
-    icon = tk.PhotoImage(file=icon_path)
-    root.iconphoto(True, icon)
-
-# Footer
-footer = tk.Label(root, text="Made by THEE OH", font=("Segoe UI", 9), fg="gray")
-footer.pack(side="bottom", anchor="e", padx=10, pady=5)
-
-root.geometry("600x550")
-root.resizable(False, False)
-
-title_label = tk.Label(root, text="Descenders Texture Renamer", font=("Segoe UI", 16, "bold"))
-title_label.pack(pady=10)
-
-frame = tk.Frame(root)
-frame.pack(pady=10)
-
-# Create drag & drop entry rows
-def make_file_row(parent, label_text):
-    row = tk.Frame(parent)
-    row.pack(fill="x", padx=20, pady=5)
-    label = tk.Label(row, text=label_text, width=20, anchor="w")
-    label.pack(side="left")
-    entry = tk.Entry(row, width=45)
-    entry.pack(side="left", padx=5)
-    browse = tk.Button(row, text="Browse", command=lambda: browse_file(entry))
-    browse.pack(side="left")
-
-    # Drag & drop with proper path stripping
-    def handle_drop(event):
-        path = event.data.strip().strip("{}").strip()
-        entry.delete(0, tk.END)
-        entry.insert(0, path)
-
-    entry.drop_target_register(DND_FILES)
-    entry.dnd_bind("<<Drop>>", handle_drop)
-
-    return entry
-
-frame_base_entry = make_file_row(frame, "Frame Base Colour:")
-frame_metal_entry = make_file_row(frame, "Frame Metallic:")
-gear_base_entry = make_file_row(frame, "Gear Base Colour:")
-gear_metal_entry = make_file_row(frame, "Gear Metallic:")
-handlebar_base_entry = make_file_row(frame, "Handlebar Base Colour:")
-handlebar_metal_entry = make_file_row(frame, "Handlebar Metallic:")
-wheels_base_entry = make_file_row(frame, "Wheels Base Colour:")
-wheels_metal_entry = make_file_row(frame, "Wheels Metallic:")
-
-# Bike number
-bike_frame = tk.Frame(root)
-bike_frame.pack(pady=20)
-tk.Label(bike_frame, text="Bike Number:").pack(side="left", padx=5)
-bike_number_entry = tk.Entry(bike_frame, width=10)
-bike_number_entry.pack(side="left")
-
-# Export button
+# --- Export button ---
 export_button = tk.Button(
     root, text="Export Textures",
-    font=("Segoe UI", 12, "bold"),
-    bg="#4CAF50", fg="white",
-    width=20, command=export_textures
+    font=("Segoe UI", 14, "bold"), bg="#4CAF50", fg="white",
+    width=22, height=2,
+    command=export_textures
 )
-export_button.pack(pady=20)
+export_button.pack(pady=30)
 
 root.mainloop()
