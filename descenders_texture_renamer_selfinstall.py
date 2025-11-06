@@ -6,9 +6,9 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image
 
-# -----------------------------
+# ----------------------------
 # Ensure tkinterdnd2 is installed
-# -----------------------------
+# ----------------------------
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
 except ImportError:
