@@ -5,10 +5,36 @@ import subprocess
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image
+from pypresence import Presence
+import time
+import threading
 
-# ----------------------------
+# -----------------------------
+# Discord Rich Presence setup
+# -----------------------------
+DISCORD_CLIENT_ID = '1435987709603741859'  # Your Discord App ID
+
+def start_discord_presence():
+    try:
+        rpc = Presence(DISCORD_CLIENT_ID)
+        rpc.connect()
+        rpc.update(
+            details="Descenders Texture Renamer",
+            large_image="theicon_1_",  # icon uploaded in Discord Dev Portal
+            state="DTR-Descenders-Texture-Renamer on GitHub",
+            buttons=[{"label": "GitHub", "url": "https://github.com/THEE-OH/DTR-Descenders-Texture-Renamer/tree/main"}]
+        )
+        while True:
+            time.sleep(15)  # refresh every 15 seconds
+    except Exception as e:
+        print("Discord Rich Presence failed:", e)
+
+# Start Discord presence in background thread
+threading.Thread(target=start_discord_presence, daemon=True).start()
+
+# -----------------------------
 # Ensure tkinterdnd2 is installed
-# ----------------------------
+# -----------------------------
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
 except ImportError:
@@ -29,7 +55,6 @@ except ImportError:
 # Texture Sorting Logic
 # -----------------------------
 def sort_file_into_slot(filename):
-    """Automatically decide where a texture belongs based on its name."""
     name = filename.lower()
     if "frame" in name:
         return "frame_metal" if "metal" in name or "ms" in name else "frame_base"
@@ -54,7 +79,6 @@ def browse_file(entry_field):
         entry_field.insert(0, file_path)
 
 def handle_bulk_drop(event):
-    """Handle multiple dropped files at once."""
     dropped = event.data.strip("{}").split("}")
     dropped = [f.strip().replace("{", "") for f in dropped if f.strip()]
     assigned = []
@@ -74,6 +98,7 @@ def handle_bulk_drop(event):
 def export_textures():
     bike_num = bike_number_entry.get().strip()
     rename_enabled = rename_var.get()
+    transparency_enabled = transparency_var.get()
 
     if rename_enabled and not bike_num.isdigit():
         messagebox.showerror("Invalid Input", "Please enter a valid bike number (numbers only).")
@@ -106,20 +131,19 @@ def export_textures():
             base_out = os.path.join(output_dir, os.path.basename(base_in)) if base_in else None
             metal_out = os.path.join(output_dir, os.path.basename(metal_in)) if metal_in else None
 
-        # Copy base color normally
         if base_in and os.path.isfile(base_in):
             shutil.copy2(base_in, base_out)
             processed.append(f"{part} base")
 
-        # Process metallic map (black = transparent, white = opaque)
         if metal_in and os.path.isfile(metal_in):
             metal_img = Image.open(metal_in).convert("RGBA")
-            new_data = []
-            for r, g, b, *_ in metal_img.getdata():
-                gray = (r + g + b) / 3
-                alpha = int((gray / 255) * 255)  # black=0 transparent, white=255 opaque
-                new_data.append((r, g, b, alpha))
-            metal_img.putdata(new_data)
+            if transparency_enabled:
+                new_data = []
+                for r, g, b, *_ in metal_img.getdata():
+                    gray = (r + g + b) / 3
+                    alpha = int((gray / 255) * 255)
+                    new_data.append((r, g, b, alpha))
+                metal_img.putdata(new_data)
             metal_img.save(metal_out)
             processed.append(f"{part} metallic")
 
@@ -133,8 +157,8 @@ def export_textures():
 # GUI Setup
 # -----------------------------
 root = TkinterDnD.Tk()
-root.title("Descenders Texture Renamer")
-root.geometry("600x650")
+root.title("Descenders Texture Renamer - Made by THEE OH")
+root.geometry("600x700")
 root.resizable(False, False)
 
 # Load icon
@@ -148,7 +172,7 @@ if os.path.exists(icon_path):
     root.iconphoto(True, icon)
 
 # Title label
-tk.Label(root, text="Descenders Texture Renamer", font=("Segoe UI", 16, "bold")).pack(pady=10)
+tk.Label(root, text="Descenders Texture Renamer - Made by THEE OH", font=("Segoe UI", 16, "bold")).pack(pady=10)
 
 # Bulk drag & drop
 bulk_frame = tk.LabelFrame(root, text="Drag & Drop All Textures Here", padx=10, pady=10)
@@ -185,7 +209,7 @@ make_file_row(frame, "Handlebar Metallic:", "handlebar_metal")
 make_file_row(frame, "Wheels Base Colour:", "wheels_base")
 make_file_row(frame, "Wheels Metallic:", "wheels_metal")
 
-# Bottom controls (centered)
+# Bottom controls
 bottom_frame = tk.Frame(root)
 bottom_frame.pack(pady=20)
 
@@ -201,17 +225,23 @@ rename_var = tk.BooleanVar(value=True)
 rename_checkbox = tk.Checkbutton(bottom_frame, text="Enable Renaming Mode", variable=rename_var)
 rename_checkbox.pack(pady=5)
 
+# Metallic transparency toggle
+transparency_var = tk.BooleanVar(value=True)
+transparency_checkbox = tk.Checkbutton(
+    bottom_frame, text="Enable adding transparency to metallic maps", variable=transparency_var
+)
+transparency_checkbox.pack(pady=5)
+
 # Export button
 export_button = tk.Button(
     bottom_frame, text="Export Textures",
     font=("Segoe UI", 12, "bold"), bg="#0078D7", fg="white",
     width=20, height=2, command=export_textures
 )
-export_button.pack(pady=5)
+export_button.pack(pady=10)
 
-# Footer - always visible at bottom-right
-footer_label = tk.Label(root, text="Made by THEE OH", font=("Segoe UI", 9), fg="gray")
-footer_label.place(relx=1.0, rely=1.0, x=-10, y=-10, anchor="se")
-
+# Footer label below export button
+footer_label = tk.Label(bottom_frame, text="Made by THEE OH", font=("Segoe UI", 9), fg="gray")
+footer_label.pack(pady=(0,10))
 
 root.mainloop()
