@@ -2,338 +2,321 @@ import os
 import sys
 import shutil
 import subprocess
+import webbrowser
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import filedialog, messagebox
 from PIL import Image
 
 # ----------------------------
-# Ensure tkinterdnd2 is installed
+# 1. Dependency Check
 # ----------------------------
-try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD
-except ImportError:
-    root_temp = tk.Tk()
-    root_temp.withdraw()
-    install = messagebox.askyesno(
-        "Install Library",
-        "The 'tkinterdnd2' library is not installed.\nInstall it now?"
-    )
-    root_temp.destroy()
+def install_libs():
+    required = ["customtkinter", "tkinterdnd2", "Pillow"]
+    missing = []
+    
+    import importlib.util
+    if importlib.util.find_spec("customtkinter") is None: missing.append("customtkinter")
+    if importlib.util.find_spec("tkinterdnd2") is None: missing.append("tkinterdnd2")
+    if importlib.util.find_spec("PIL") is None: missing.append("Pillow")
 
-    if install:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "tkinterdnd2"])
-        from tkinterdnd2 import DND_FILES, TkinterDnD
-    else:
-        sys.exit(1)
+    if missing:
+        root_temp = tk.Tk()
+        root_temp.withdraw()
+        if messagebox.askyesno("Missing Libraries", f"Install required libraries?\n({', '.join(missing)})"):
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing)
+            except Exception as e:
+                messagebox.showerror("Error", f"Install failed: {e}")
+                sys.exit(1)
+        else:
+            sys.exit(1)
+
+install_libs()
+
+import customtkinter as ctk
+from tkinterdnd2 import TkinterDnD, DND_FILES
 
 # ----------------------------
-# Sorting + Processing Helpers
+# 2. Modern UI Config
+# ----------------------------
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("dark-blue") 
+
+class App(ctk.CTk, TkinterDnD.DnDWrapper):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.TkdndVersion = TkinterDnD._require(self)
+
+# ----------------------------
+# 3. Logic Functions
 # ----------------------------
 def sort_file_into_slot(filename):
-    """Return the entry key for a given filename (bike-relevant)."""
     name = filename.lower()
-    if "frame" in name:
-        return "frame_metal" if "metal" in name or "ms" in name else "frame_base"
-    elif "gear" in name:
-        return "gear_metal" if "metal" in name or "ms" in name else "gear_base"
-    elif "handle" in name or "bar" in name:
-        return "handle_metal" if "metal" in name or "ms" in name else "handle_base"
-    elif "wheel" in name or "wheels" in name:
-        return "wheels_metal" if "metal" in name or "ms" in name else "wheels_base"
+    if "frame" in name: return "frame_metal" if "metal" in name or "ms" in name else "frame_base"
+    elif "gear" in name: return "gear_metal" if "metal" in name or "ms" in name else "gear_base"
+    elif "handle" in name or "bar" in name: return "handle_metal" if "metal" in name or "ms" in name else "handle_base"
+    elif "wheel" in name or "wheels" in name: return "wheels_metal" if "metal" in name or "ms" in name else "wheels_base"
     return None
 
 def apply_metallic_transparency(input_file, output_file):
-    img = Image.open(input_file).convert("RGBA")
-    new_data = []
-    for r, g, b, *_ in img.getdata():
-        gray = (r + g + b) / 3
-        alpha = int((gray / 255) * 255)
-        new_data.append((r, g, b, alpha))
-    img.putdata(new_data)
-    img.save(output_file)
+    try:
+        img = Image.open(input_file).convert("RGBA")
+        new_data = []
+        for r, g, b, *_ in img.getdata():
+            gray = (r + g + b) / 3
+            alpha = int((gray / 255) * 255)
+            new_data.append((r, g, b, alpha))
+        img.putdata(new_data)
+        img.save(output_file)
+    except Exception as e:
+        print(f"Error: {e}")
 
-# ----------------------------
-# Browse + Drop helpers
-# ----------------------------
 def browse_file(entry):
-    file = filedialog.askopenfilename(filetypes=[("Images", "*.png;*.jpg;*.jpeg;*.tga")])
-    if file:
-        entry.delete(0, tk.END)
-        entry.insert(0, file)
+    f = filedialog.askopenfilename(filetypes=[("Images", "*.png;*.jpg;*.jpeg;*.tga")])
+    if f: entry.delete(0, tk.END); entry.insert(0, f)
 
 def bind_drop(entry):
     entry.drop_target_register(DND_FILES)
     entry.dnd_bind("<<Drop>>", lambda e: entry.delete(0, tk.END) or entry.insert(0, e.data.strip("{}")))
 
 # ----------------------------
-# GUI
+# 4. Main Application
 # ----------------------------
-root = TkinterDnD.Tk()
-root.title("Descenders Texture Renamer - Made by THEE OH")
-root.geometry("650x700")
-root.resizable(False, False)
+app = App()
+app.title("Descenders Texture Renamer")
+app.geometry("720x880")
+app.resizable(False, False)
 
 # Icon
-if getattr(sys, 'frozen', False):
-    base_path = sys._MEIPASS
-else:
-    base_path = os.path.dirname(__file__)
+if getattr(sys, 'frozen', False): base_path = sys._MEIPASS
+else: base_path = os.path.dirname(__file__)
+if os.path.exists(os.path.join(base_path, "theicon.png")):
+    try: app.iconphoto(True, tk.PhotoImage(file=os.path.join(base_path, "theicon.png")))
+    except: pass
 
-icon_path = os.path.join(base_path, "theicon.png")
-if os.path.exists(icon_path):
-    try:
-        root.iconphoto(True, tk.PhotoImage(file=icon_path))
-    except Exception:
-        pass  # ignore icon load errors
+# Header
+ctk.CTkLabel(app, text="Descenders Texture Renamer", font=("Roboto Medium", 22)).pack(pady=(20, 5))
 
-# Notebook Tabs
-notebook = ttk.Notebook(root)
-notebook.pack(expand=True, fill="both")
+# Tabs
+tabview = ctk.CTkTabview(app, width=680, height=700, corner_radius=15, fg_color=("gray95", "gray10"))
+tabview.pack(padx=20, pady=10, fill="both", expand=True)
 
-tab_bikes = ttk.Frame(notebook)
-tab_clothes = ttk.Frame(notebook)
-tab_helmets = ttk.Frame(notebook)
+tab_bikes = tabview.add("Bikes")
+tab_clothes = tabview.add("Clothes")
+tab_helmets = tabview.add("Helmets / Goggles")
 
-notebook.add(tab_bikes, text="Bikes")
-notebook.add(tab_clothes, text="Clothes")
-notebook.add(tab_helmets, text="Helmets / Goggles")
-
-# ----------------------------
-# BIKE TAB
-# ----------------------------
+# =============================================================================
+# TAB 1: BIKES
+# =============================================================================
 bike_entries = {}
 
-def bike_row(label, key, parent):
-    row = tk.Frame(parent)
-    row.pack(pady=4, padx=20, fill="x")
-    tk.Label(row, text=label, width=20, anchor="w").pack(side="left")
-    entry = tk.Entry(row, width=40)
-    entry.pack(side="left", padx=5)
-    btn = tk.Button(row, text="Browse", command=lambda: browse_file(entry))
-    btn.pack(side="left")
+def create_input_row(parent, label_text, key, dictionary):
+    # Distinct "Card" background for each row
+    frame = ctk.CTkFrame(parent, fg_color=("white", "#212121"), corner_radius=8, border_width=1, border_color=("gray80", "#2b2b2b"))
+    frame.pack(fill="x", pady=3, padx=5)
+    
+    lbl = ctk.CTkLabel(frame, text=label_text, width=130, anchor="w", font=("Roboto", 12))
+    lbl.pack(side="left", padx=(15, 0))
+    
+    # Flat entry style
+    entry = ctk.CTkEntry(frame, width=350, height=32, border_width=0, fg_color=("gray95", "#2b2b2b"), placeholder_text="Browse or Drop file...")
+    entry.pack(side="left", padx=10, pady=5)
     bind_drop(entry)
-    bike_entries[key] = entry
+    dictionary[key] = entry
+    
+    # Subtle browse button
+    btn = ctk.CTkButton(frame, text="Browse", width=70, height=28, fg_color=("gray80", "#3a3a3a"), hover_color=("gray70", "#4a4a4a"), text_color=("black", "white"), command=lambda: browse_file(entry))
+    btn.pack(side="left", padx=(0, 10))
 
-# Create the 8 entry rows
-bike_row("Frame Base", "frame_base", tab_bikes)
-bike_row("Frame Metallic", "frame_metal", tab_bikes)
-bike_row("Gear Base", "gear_base", tab_bikes)
-bike_row("Gear Metallic", "gear_metal", tab_bikes)
-bike_row("Handlebar Base", "handle_base", tab_bikes)
-bike_row("Handlebar Metallic", "handle_metal", tab_bikes)
-bike_row("Wheels Base", "wheels_base", tab_bikes)
-bike_row("Wheels Metallic", "wheels_metal", tab_bikes)
+# Inputs
+create_input_row(tab_bikes, "Frame Base", "frame_base", bike_entries)
+create_input_row(tab_bikes, "Frame Metallic", "frame_metal", bike_entries)
+create_input_row(tab_bikes, "Gear Base", "gear_base", bike_entries)
+create_input_row(tab_bikes, "Gear Metallic", "gear_metal", bike_entries)
+create_input_row(tab_bikes, "Handlebar Base", "handle_base", bike_entries)
+create_input_row(tab_bikes, "Handlebar Metallic", "handle_metal", bike_entries)
+create_input_row(tab_bikes, "Wheels Base", "wheels_base", bike_entries)
+create_input_row(tab_bikes, "Wheels Metallic", "wheels_metal", bike_entries)
 
-# Bulk drag & drop area for bikes (restores the feature)
-bulk_frame = tk.LabelFrame(tab_bikes, text="Bulk Drag & Drop (Bikes)", padx=10, pady=8)
-bulk_frame.pack(padx=20, pady=(10, 6), fill="x")
+# --- DRAG & DROP ZONE ---
+bulk_frame = ctk.CTkFrame(
+    tab_bikes, 
+    fg_color=("#F0F0F0", "#181818"), 
+    border_width=2, 
+    border_color=("#BBBBBB", "#333333"), 
+    corner_radius=12
+)
+bulk_frame.pack(fill="x", padx=10, pady=15)
 
-bulk_label = tk.Label(bulk_frame, text="Drop multiple bike textures here — up to 8 files. Files are auto-sorted by name.", bg="#f0f0f0", height=3)
-bulk_label.pack(fill="x", padx=6, pady=4)
+bulk_lbl = ctk.CTkLabel(
+    bulk_frame, 
+    text="Drag and Drop\nAuto Sorts Textures", 
+    font=("Roboto Medium", 15),
+    text_color=("gray40", "gray70")
+)
+bulk_lbl.pack(pady=20)
 
-def handle_bike_bulk_drop(event):
-    raw = event.data.strip()
-    # Windows drop format often like: {C:\path\file.png} {C:\path\file2.png}
-    parts = raw.replace("}{", "} {").split()
-    cleaned = []
-    for p in parts:
-        p = p.strip()
-        if p.startswith("{") and p.endswith("}"):
-            p = p[1:-1]
-        cleaned.append(p)
-    assigned = []
+def handle_bike_bulk(event):
+    parts = event.data.strip().replace("}{", "} {").split()
+    cleaned = [p.strip().strip("{}") for p in parts]
+    found = 0
     for path in cleaned:
-        name = os.path.basename(path)
-        slot = sort_file_into_slot(name)
+        slot = sort_file_into_slot(os.path.basename(path))
         if slot and slot in bike_entries:
-            bike_entries[slot].delete(0, tk.END)
-            bike_entries[slot].insert(0, path)
-            assigned.append(slot)
-    if assigned:
-        messagebox.showinfo("Files Assigned", f"Assigned: {', '.join(assigned)}")
+            bike_entries[slot].delete(0, tk.END); bike_entries[slot].insert(0, path)
+            found += 1
+    
+    if found:
+        bulk_lbl.configure(text=f"✅ Sorted {found} files successfully!", text_color="#2CC985")
+        app.after(3000, lambda: bulk_lbl.configure(text="Drag and Drop\nAuto Sorts Textures", text_color=("gray40", "gray70")))
     else:
-        messagebox.showwarning("No Match", "No valid bike texture names detected in dropped files.")
+        bulk_lbl.configure(text="⚠️ No matching filenames found.", text_color="orange")
+        app.after(3000, lambda: bulk_lbl.configure(text="Drag and Drop\nAuto Sorts Textures", text_color=("gray40", "gray70")))
 
-bulk_label.drop_target_register(DND_FILES)
-bulk_label.dnd_bind("<<Drop>>", handle_bike_bulk_drop)
+bulk_lbl.drop_target_register(DND_FILES)
+bulk_lbl.dnd_bind("<<Drop>>", handle_bike_bulk)
 
-# Bike bottom controls
-bike_bottom = tk.Frame(tab_bikes)
-bike_bottom.pack(pady=12)
+# --- CONTROLS BAR ---
+controls_frame = ctk.CTkFrame(tab_bikes, fg_color=("white", "#212121"), corner_radius=10)
+controls_frame.pack(pady=5, padx=10, fill="x")
 
-# Bike number and controls arranged horizontally for clarity
-bike_controls = tk.Frame(bike_bottom)
-bike_controls.pack()
+# Centered container inside the bar
+c_inner = ctk.CTkFrame(controls_frame, fg_color="transparent")
+c_inner.pack(pady=10)
 
-tk.Label(bike_controls, text="Bike Number:").grid(row=0, column=0, padx=6)
-bike_num = tk.Entry(bike_controls, width=10)
-bike_num.grid(row=0, column=1, padx=6)
+ctk.CTkLabel(c_inner, text="Bike Number:", font=("Roboto", 12, "bold")).pack(side="left", padx=5)
+bike_num_entry = ctk.CTkEntry(c_inner, width=60, justify="center", corner_radius=10)
+bike_num_entry.pack(side="left", padx=10)
 
-rename_bikes = tk.BooleanVar(value=True)
-tk.Checkbutton(bike_controls, text="Enable Renaming Mode", variable=rename_bikes).grid(row=0, column=2, padx=6)
+rename_bikes_var = ctk.BooleanVar(value=True)
+ctk.CTkCheckBox(c_inner, text="Renaming Mode", variable=rename_bikes_var, font=("Roboto", 12)).pack(side="left", padx=15)
 
-metal_toggle = tk.BooleanVar(value=True)
-tk.Checkbutton(bike_controls, text="Enable adding transparency to metallic maps", variable=metal_toggle).grid(row=0, column=3, padx=6)
+metal_bikes_var = ctk.BooleanVar(value=True)
+ctk.CTkCheckBox(c_inner, text="Metallic Transparency", variable=metal_bikes_var, font=("Roboto", 12)).pack(side="left", padx=5)
 
-# Export function for bikes
 def export_bikes():
-    num = bike_num.get().strip()
-    if rename_bikes.get() and not num.isdigit():
-        messagebox.showerror("Invalid Input", "Bike number must be numeric")
-        return
+    num = bike_num_entry.get().strip()
+    if rename_bikes_var.get() and not num.isdigit(): return messagebox.showerror("Error", "Enter a valid bike number.")
+    out = filedialog.askdirectory()
+    if not out: return
 
-    outdir = filedialog.askdirectory()
-    if not outdir:
-        return
-
-    pairs = {
-        "frame": ("frame_base", "frame_metal"),
-        "gear": ("gear_base", "gear_metal"),
-        "handlebar": ("handle_base", "handle_metal"),
-        "wheels": ("wheels_base", "wheels_metal")
-    }
-
-    exported = []
-    for part, (base, metal) in pairs.items():
-        base_in = bike_entries[base].get().strip()
-        metal_in = bike_entries[metal].get().strip()
-
-        if rename_bikes.get():
-            base_out = os.path.join(outdir, f"{num}_{part}_{num}_D.png")
-            metal_out = os.path.join(outdir, f"{num}_{part}_{num}_MS.png")
-        else:
-            base_out = os.path.join(outdir, os.path.basename(base_in)) if base_in else None
-            metal_out = os.path.join(outdir, os.path.basename(metal_in)) if metal_in else None
-
-        if base_in:
+    pairs = {"frame":("frame_base","frame_metal"), "gear":("gear_base","gear_metal"), 
+             "handlebar":("handle_base","handle_metal"), "wheels":("wheels_base","wheels_metal")}
+    count = 0
+    for part, (b, m) in pairs.items():
+        b_p, m_p = bike_entries[b].get().strip(), bike_entries[m].get().strip()
+        if b_p:
+            dst = os.path.join(out, f"{num}_{part}_{num}_D.png" if rename_bikes_var.get() else os.path.basename(b_p))
+            try: shutil.copy2(b_p, dst); count+=1
+            except: pass
+        if m_p:
+            dst = os.path.join(out, f"{num}_{part}_{num}_MS.png" if rename_bikes_var.get() else os.path.basename(m_p))
             try:
-                shutil.copy2(base_in, base_out)
-                exported.append(f"{part} base")
-            except Exception as e:
-                messagebox.showwarning("Copy failed", f"Failed to copy base for {part}: {e}")
+                if metal_bikes_var.get(): apply_metallic_transparency(m_p, dst)
+                else: shutil.copy2(m_p, dst)
+                count+=1
+            except: pass
+    messagebox.showinfo("Export", f"Processed {count} files.")
 
-        if metal_in:
-            try:
-                if metal_toggle.get():
-                    apply_metallic_transparency(metal_in, metal_out)
-                else:
-                    shutil.copy2(metal_in, metal_out)
-                exported.append(f"{part} metallic")
-            except Exception as e:
-                messagebox.showwarning("Processing failed", f"Failed handling metallic for {part}: {e}")
+ctk.CTkButton(tab_bikes, text="EXPORT BIKE", height=45, width=200, font=("Roboto Medium", 15), fg_color="#2CC985", hover_color="#26ad72", corner_radius=22, command=export_bikes).pack(pady=20)
 
-    if exported:
-        messagebox.showinfo("Done", "Exported: " + ", ".join(exported))
-    else:
-        messagebox.showwarning("No files", "No bike textures were exported.")
 
-tk.Button(
-    bike_bottom,
-    text="Export Bikes",
-    bg="#0078D7",
-    fg="white",
-    font=("Segoe UI", 11, "bold"),
-    width=22,
-    height=2,
-    command=export_bikes
-).pack(pady=10)
+# =============================================================================
+# TAB 2: CLOTHES
+# =============================================================================
+clo_frame = ctk.CTkFrame(tab_clothes, fg_color="transparent")
+clo_frame.pack(expand=True)
 
-# ----------------------------
-# CLOTHES TAB
-# ----------------------------
-clo_frame = tk.Frame(tab_clothes, pady=20)
-clo_frame.pack()
+ctk.CTkLabel(clo_frame, text="Clothes Base Colour Map", font=("Roboto Medium", 16)).pack(pady=(0, 15))
 
-tk.Label(clo_frame, text="Clothes Base Colour Map").pack()
-
-clo_entry = tk.Entry(clo_frame, width=45)
+clo_entry = ctk.CTkEntry(clo_frame, width=400, height=40, placeholder_text="Drag file here...", justify="center", corner_radius=10)
 clo_entry.pack(pady=5)
 bind_drop(clo_entry)
 
-tk.Button(clo_frame, text="Browse", command=lambda: browse_file(clo_entry)).pack(pady=4)
+ctk.CTkButton(clo_frame, text="Browse File", width=120, height=32, fg_color=("gray80", "#3a3a3a"), hover_color=("gray70", "#4a4a4a"), text_color=("black", "white"), command=lambda: browse_file(clo_entry)).pack(pady=10)
 
-clo_number = tk.Entry(clo_frame, width=10)
-tk.Label(clo_frame, text="Clothes Number:").pack(pady=5)
-clo_number.pack()
+ctk.CTkLabel(clo_frame, text="Clothes Number", font=("Roboto", 12)).pack(pady=(20, 5))
+clo_num_entry = ctk.CTkEntry(clo_frame, width=80, justify="center", corner_radius=10)
+clo_num_entry.pack(pady=5)
 
 def export_clothes():
-    num = clo_number.get().strip()
-    file = clo_entry.get().strip()
-    if not num.isdigit() or not file:
-        messagebox.showerror("Error", "Invalid input")
-        return
-
+    num, f = clo_num_entry.get().strip(), clo_entry.get().strip()
+    if not num.isdigit() or not f: return messagebox.showerror("Error", "Invalid input")
     out = filedialog.askdirectory()
-    if not out:
-        return
+    if not out: return
+    try: shutil.copy2(f, os.path.join(out, f"{num}_{num}_D.png")); messagebox.showinfo("Success", "Clothes exported.")
+    except Exception as e: messagebox.showerror("Error", str(e))
 
-    try:
-        shutil.copy2(file, os.path.join(out, f"{num}_{num}_D.png"))
-        messagebox.showinfo("Done", "Clothes exported!")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to export clothes: {e}")
+ctk.CTkButton(tab_clothes, text="EXPORT CLOTHES", height=45, width=200, font=("Roboto Medium", 15), fg_color="#3B8ED0", corner_radius=22, command=export_clothes).pack(pady=30)
 
-tk.Button(tab_clothes, text="Export Clothes", bg="#0078D7", fg="white", height=2, width=20,
-          command=export_clothes).pack(pady=15)
 
-# ----------------------------
-# HELMET / GOGGLES TAB
-# ----------------------------
+# =============================================================================
+# TAB 3: HELMETS / GOGGLES
+# =============================================================================
 hel_entries = {}
+hel_center = ctk.CTkFrame(tab_helmets, fg_color="transparent")
+hel_center.pack(expand=True, fill="x", padx=20)
 
-def hel_row(text, key):
-    row = tk.Frame(tab_helmets)
-    row.pack(pady=5)
-    tk.Label(row, text=text, width=18, anchor="w").pack(side="left")
-    e = tk.Entry(row, width=40)
-    e.pack(side="left", padx=4)
+ctk.CTkLabel(hel_center, text="", height=20).pack() 
+# Helper to reuse row style
+def create_hel_row(label, key):
+    frame = ctk.CTkFrame(hel_center, fg_color=("white", "#212121"), corner_radius=8, border_width=1, border_color=("gray80", "#2b2b2b"))
+    frame.pack(fill="x", pady=5)
+    ctk.CTkLabel(frame, text=label, width=120, anchor="w").pack(side="left", padx=15)
+    e = ctk.CTkEntry(frame, width=350, height=32, border_width=0, fg_color=("gray95", "#2b2b2b"))
+    e.pack(side="left", padx=10, pady=5)
     bind_drop(e)
     hel_entries[key] = e
-    tk.Button(row, text="Browse", command=lambda: browse_file(e)).pack(side="left")
+    ctk.CTkButton(frame, text="Browse", width=70, height=28, fg_color=("gray80", "#3a3a3a"), text_color=("black", "white"), command=lambda: browse_file(e)).pack(side="left")
 
-hel_row("Base Colour", "base")
-hel_row("Metallic Map", "metal")
+create_hel_row("Base Colour", "base")
+create_hel_row("Metallic Map", "metal")
 
-hel_number = tk.Entry(tab_helmets, width=10)
-tk.Label(tab_helmets, text="Helmet/Goggle Number:").pack(pady=5)
-hel_number.pack()
+# Vertical Options Stack
+opts = ctk.CTkFrame(hel_center, fg_color="transparent")
+opts.pack(pady=30)
 
-def export_helmet():
-    num = hel_number.get().strip()
-    base = hel_entries["base"].get().strip()
-    metal = hel_entries["metal"].get().strip()
+num_row = ctk.CTkFrame(opts, fg_color="transparent")
+num_row.pack(pady=5)
+ctk.CTkLabel(num_row, text="Helmet/Goggle #:", font=("Roboto", 12)).pack(side="left", padx=10)
+hel_num_entry = ctk.CTkEntry(num_row, width=80, justify="center", corner_radius=10)
+hel_num_entry.pack(side="left")
 
-    if not num.isdigit():
-        messagebox.showerror("Error", "Number required")
-        return
+hel_rename_var = ctk.BooleanVar(value=True)
+ctk.CTkCheckBox(opts, text="Enable Renaming Mode", variable=hel_rename_var).pack(pady=10)
 
+hel_metal_var = ctk.BooleanVar(value=True)
+ctk.CTkCheckBox(opts, text="Enable Metallic Transparency", variable=hel_metal_var).pack(pady=5)
+
+def export_helmets():
+    num, b, m = hel_num_entry.get().strip(), hel_entries['base'].get().strip(), hel_entries['metal'].get().strip()
+    if hel_rename_var.get() and not num.isdigit(): return messagebox.showerror("Error", "Number required.")
     out = filedialog.askdirectory()
-    if not out:
-        return
-
+    if not out: return
     try:
-        if base:
-            shutil.copy2(base, os.path.join(out, f"{num}_{num}_D.png"))
-        if metal:
-            apply_metallic_transparency(metal, os.path.join(out, f"{num}_{num}_MS.png"))
-        messagebox.showinfo("Done", "Helmet / goggles exported!")
-    except Exception as e:
-        messagebox.showerror("Error", f"Failed to export helmet/goggles: {e}")
+        if b: shutil.copy2(b, os.path.join(out, f"{num}_{num}_D.png" if hel_rename_var.get() else os.path.basename(b)))
+        if m:
+            dst = os.path.join(out, f"{num}_{num}_MS.png" if hel_rename_var.get() else os.path.basename(m))
+            if hel_metal_var.get(): apply_metallic_transparency(m, dst)
+            else: shutil.copy2(m, dst)
+        messagebox.showinfo("Success", "Files exported.")
+    except Exception as e: messagebox.showerror("Error", str(e))
 
-tk.Button(
-    tab_helmets,
-    text="Export Helmets / Goggles",
-    bg="#0078D7",
-    fg="white",
-    height=2,
-    width=24,
-    command=export_helmet
-).pack(pady=10)
+ctk.CTkButton(tab_helmets, text="EXPORT HELMET", height=45, width=200, font=("Roboto Medium", 15), fg_color="#E04F5F", hover_color="#C43343", corner_radius=22, command=export_helmets).pack(pady=20)
 
-# ----------------------------
+
+# =============================================================================
 # FOOTER
-# ----------------------------
-footer = tk.Label(bike_bottom, text="Made by THEE OH", fg="gray")
-footer.pack(pady=(0,10))
+# =============================================================================
+footer_frame = ctk.CTkFrame(app, fg_color=("white", "#181818"), corner_radius=20, height=50)
+footer_frame.pack(side="bottom", fill="x", padx=20, pady=20)
 
-root.mainloop()
+btn_gh = ctk.CTkButton(footer_frame, text="GitHub", width=90, height=28, fg_color="#24292e", hover_color="#444c56", corner_radius=14, command=lambda: webbrowser.open("https://github.com/THEE-OH"))
+btn_gh.pack(side="left", padx=(15, 8), pady=10)
+
+btn_ds = ctk.CTkButton(footer_frame, text="Discord", width=90, height=28, fg_color="#5865F2", hover_color="#4752C4", corner_radius=14, command=lambda: webbrowser.open("https://discord.gg/tfjRXa4BNx"))
+btn_ds.pack(side="left", padx=0, pady=10)
+
+ctk.CTkLabel(footer_frame, text="Made by THEE OH", text_color="gray50", font=("Roboto", 11)).pack(side="right", padx=20)
+
+app.mainloop()
