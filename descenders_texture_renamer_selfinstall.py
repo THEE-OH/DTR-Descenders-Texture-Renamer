@@ -7,9 +7,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from PIL import Image
 
-# ----------------------------
-# 1. Dependency Check
-# ----------------------------
+
 def install_libs():
     required = ["customtkinter", "tkinterdnd2", "Pillow"]
     missing = []
@@ -36,9 +34,7 @@ install_libs()
 import customtkinter as ctk
 from tkinterdnd2 import TkinterDnD, DND_FILES
 
-# ----------------------------
-# 2. Modern UI Config
-# ----------------------------
+
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("dark-blue") 
 
@@ -47,9 +43,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         super().__init__(*args, **kwargs)
         self.TkdndVersion = TkinterDnD._require(self)
 
-# ----------------------------
-# 3. Logic Functions
-# ----------------------------
+
 
 def get_dropped_paths(data):
     """
@@ -60,7 +54,7 @@ def get_dropped_paths(data):
     
     clean_data = data.strip()
     
-    # If it looks like a list of braced paths
+    
     if "}{" in clean_data:
         parts = clean_data.replace("}{", "} {").split("} {")
     elif clean_data.startswith("{") and clean_data.endswith("}"):
@@ -110,9 +104,6 @@ def bind_drop(entry):
             
     entry.dnd_bind("<<Drop>>", on_drop)
 
-# ----------------------------
-# 4. Main Application
-# ----------------------------
 app = App()
 app.title("Descenders Texture Renamer")
 app.geometry("720x880")
@@ -125,10 +116,8 @@ if os.path.exists(os.path.join(base_path, "theicon.png")):
     try: app.iconphoto(True, tk.PhotoImage(file=os.path.join(base_path, "theicon.png")))
     except: pass
 
-# Header
 ctk.CTkLabel(app, text="Descenders Texture Renamer", font=("Roboto Medium", 22)).pack(pady=(20, 5))
 
-# Tabs
 tabview = ctk.CTkTabview(app, width=680, height=700, corner_radius=15, fg_color=("gray95", "gray10"))
 tabview.pack(padx=20, pady=10, fill="both", expand=True)
 
@@ -136,9 +125,6 @@ tab_bikes = tabview.add("Bikes")
 tab_clothes = tabview.add("Clothes")
 tab_helmets = tabview.add("Helmets / Goggles")
 
-# =============================================================================
-# TAB 1: BIKES
-# =============================================================================
 bike_entries = {}
 
 def create_input_row(parent, label_text, key, dictionary):
@@ -156,7 +142,6 @@ def create_input_row(parent, label_text, key, dictionary):
     btn = ctk.CTkButton(frame, text="Browse", width=70, height=28, fg_color=("gray80", "#3a3a3a"), hover_color=("gray70", "#4a4a4a"), text_color=("black", "white"), command=lambda: browse_file(entry))
     btn.pack(side="left", padx=(0, 10))
 
-# Inputs
 create_input_row(tab_bikes, "Frame Base", "frame_base", bike_entries)
 create_input_row(tab_bikes, "Frame Metallic", "frame_metal", bike_entries)
 create_input_row(tab_bikes, "Gear Base", "gear_base", bike_entries)
@@ -166,16 +151,13 @@ create_input_row(tab_bikes, "Handlebar Metallic", "handle_metal", bike_entries)
 create_input_row(tab_bikes, "Wheels Base", "wheels_base", bike_entries)
 create_input_row(tab_bikes, "Wheels Metallic", "wheels_metal", bike_entries)
 
-# --- DRAG & DROP ZONE (BULK) ---
-# 1. Create the Frame
 bulk_frame = ctk.CTkFrame(tab_bikes, fg_color=("#F0F0F0", "#181818"), border_width=2, border_color=("#BBBBBB", "#333333"), corner_radius=12)
 bulk_frame.pack(fill="x", padx=10, pady=15)
 
-# 2. Create the Label inside
+
 bulk_lbl = ctk.CTkLabel(bulk_frame, text="Drag and Drop\nAuto Sorts Textures", font=("Roboto Medium", 15), text_color=("gray40", "gray70"))
 bulk_lbl.pack(pady=20, fill="both", expand=True)
 
-# 3. Handler Function
 def handle_bike_bulk(event):
     paths = get_dropped_paths(event.data)
     
@@ -188,21 +170,19 @@ def handle_bike_bulk(event):
             found += 1
     
     if found:
-        bulk_lbl.configure(text=f"✅ Sorted {found} files successfully!", text_color="#2CC985")
+        bulk_lbl.configure(text=f"Sorted {found} files successfully!", text_color="#2CC985")
         app.after(3000, lambda: bulk_lbl.configure(text="Drag and Drop\nAuto Sorts Textures", text_color=("gray40", "gray70")))
     else:
-        bulk_lbl.configure(text="⚠️ No matching filenames found.", text_color="orange")
+        bulk_lbl.configure(text="No matching filenames found.", text_color="orange")
         app.after(3000, lambda: bulk_lbl.configure(text="Drag and Drop\nAuto Sorts Textures", text_color=("gray40", "gray70")))
 
-# 4. Bind Drop to BOTH the Frame AND the Label
-# This ensures the drop works whether you hit the text or the empty space in the box
+
 bulk_frame.drop_target_register(DND_FILES)
 bulk_frame.dnd_bind("<<Drop>>", handle_bike_bulk)
 
 bulk_lbl.drop_target_register(DND_FILES)
 bulk_lbl.dnd_bind("<<Drop>>", handle_bike_bulk)
 
-# --- CONTROLS ---
 controls_frame = ctk.CTkFrame(tab_bikes, fg_color=("white", "#212121"), corner_radius=10)
 controls_frame.pack(pady=5, padx=10, fill="x")
 c_inner = ctk.CTkFrame(controls_frame, fg_color="transparent")
@@ -218,7 +198,6 @@ ctk.CTkCheckBox(c_inner, text="Renaming Mode", variable=rename_bikes_var, font=(
 metal_bikes_var = ctk.BooleanVar(value=True)
 ctk.CTkCheckBox(c_inner, text="Metallic Transparency", variable=metal_bikes_var, font=("Roboto", 12)).pack(side="left", padx=5)
 
-# --- EXPORT LOGIC ---
 def export_bikes():
     num = bike_num_entry.get().strip()
     if rename_bikes_var.get() and not num.isdigit(): 
@@ -244,19 +223,18 @@ def export_bikes():
         # Process Base
         if base_path:
             if not os.path.exists(base_path):
-                debug_log.append(f"❌ Base: File not found at '{base_path}'")
+                debug_log.append(f"Base: File not found at '{base_path}'")
             else:
                 try:
                     dest_name = f"{num}_{part}_{num}_D.png" if rename_bikes_var.get() else os.path.basename(base_path)
                     shutil.copy2(base_path, os.path.join(out, dest_name))
                     success_count += 1
                 except Exception as e:
-                    debug_log.append(f"❌ Error copying {part} base: {e}")
+                    debug_log.append(f"Error copying {part} base: {e}")
 
-        # Process Metal
         if metal_path:
             if not os.path.exists(metal_path):
-                debug_log.append(f"❌ Metal: File not found at '{metal_path}'")
+                debug_log.append(f"Metal: File not found at '{metal_path}'")
             else:
                 try:
                     dest_name = f"{num}_{part}_{num}_MS.png" if rename_bikes_var.get() else os.path.basename(metal_path)
@@ -268,7 +246,7 @@ def export_bikes():
                         shutil.copy2(metal_path, dest_full)
                     success_count += 1
                 except Exception as e:
-                    debug_log.append(f"❌ Error processing {part} metal: {e}")
+                    debug_log.append(f"Error processing {part} metal: {e}")
 
     if success_count == 0:
         if debug_log:
@@ -282,9 +260,6 @@ def export_bikes():
 ctk.CTkButton(tab_bikes, text="EXPORT BIKE", height=45, width=200, font=("Roboto Medium", 15), fg_color="#2CC985", hover_color="#26ad72", corner_radius=22, command=export_bikes).pack(pady=20)
 
 
-# =============================================================================
-# TAB 2: CLOTHES
-# =============================================================================
 clo_frame = ctk.CTkFrame(tab_clothes, fg_color="transparent")
 clo_frame.pack(expand=True)
 ctk.CTkLabel(clo_frame, text="Clothes Base Colour Map", font=("Roboto Medium", 16)).pack(pady=(0, 15))
@@ -308,9 +283,6 @@ def export_clothes():
 ctk.CTkButton(tab_clothes, text="EXPORT CLOTHES", height=45, width=200, font=("Roboto Medium", 15), fg_color="#3B8ED0", corner_radius=22, command=export_clothes).pack(pady=30)
 
 
-# =============================================================================
-# TAB 3: HELMETS
-# =============================================================================
 hel_entries = {}
 hel_center = ctk.CTkFrame(tab_helmets, fg_color="transparent")
 hel_center.pack(expand=True, fill="x", padx=20)
@@ -370,9 +342,6 @@ def export_helmets():
 ctk.CTkButton(tab_helmets, text="EXPORT HELMET", height=45, width=200, font=("Roboto Medium", 15), fg_color="#E04F5F", hover_color="#C43343", corner_radius=22, command=export_helmets).pack(pady=20)
 
 
-# =============================================================================
-# FOOTER
-# =============================================================================
 footer_frame = ctk.CTkFrame(app, fg_color=("white", "#181818"), corner_radius=20, height=50)
 footer_frame.pack(side="bottom", fill="x", padx=20, pady=20)
 btn_gh = ctk.CTkButton(footer_frame, text="GitHub", width=90, height=28, fg_color="#24292e", hover_color="#444c56", corner_radius=14, command=lambda: webbrowser.open("https://github.com/THEE-OH"))
